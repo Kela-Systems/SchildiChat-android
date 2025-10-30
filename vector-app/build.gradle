@@ -145,7 +145,7 @@ android {
     compileSdk versions.compileSdk
 
     defaultConfig {
-        applicationId "de.spiritcroc.riotx"
+        applicationId "com.kela.chat"
         // Set to API 21: see #405
         minSdk versions.minSdk
         targetSdk versions.targetSdk
@@ -252,7 +252,7 @@ android {
         debug {
             applicationIdSuffix ".debug"
             signingConfig signingConfigs.debug
-            resValue "string", "app_name", "SchildiChat dbg"
+            resValue "string", "app_name", "Kela Chat dbg"
 
             if (project.hasProperty("coverage")) {
                 testCoverageEnabled = project.coverage == "true"
@@ -260,7 +260,7 @@ android {
         }
 
         release {
-            resValue "string", "app_name", "SchildiChat"
+            resValue "string", "app_name", "Kela Chat"
             postprocessing {
                 // FIXME Set to true.
                 removeUnusedCode false
