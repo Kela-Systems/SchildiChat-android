@@ -1,0 +1,10 @@
+## This file must *NOT* be checked into Version Control Systems,
+# as it contains information specific to your local configuration.
+
+## Command to generate new keystore, if you do not have one
+# keytool -genkey -v -keystore releasetest.keystore -alias releasetestkey -keyalg RSA -keysize 2048 -validity 10000
+
+keystore.filename=releasetest.keystore
+keystore.password=<keystore_password>
+key.alias=releasetestkey
+key.password=<key_pass>
