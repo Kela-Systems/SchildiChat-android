@@ -218,7 +218,7 @@ class HomeActivity :
             } else {
                 replaceFragment(views.homeDetailFragmentContainer, HomeDetailFragment::class.java)
                 replaceFragment(views.homeDrawerFragmentContainer, HomeDrawerFragment::class.java)
-                views.drawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_UNLOCKED)
+                views.drawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_CLOSED)
             }
         }
 
