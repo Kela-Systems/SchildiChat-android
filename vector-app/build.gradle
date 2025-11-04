@@ -68,7 +68,7 @@ ext.versionMinor = 6
 // is the value for the next regular release.
 ext.versionPatch = 48
 
-ext.scVersion = 89
+ext.scVersion = 90
 
 static def getGitTimestamp() {
     def cmd = 'git show -s --format=%ct'
@@ -183,8 +183,8 @@ android {
         renderscriptTargetApi 24
         renderscriptSupportModeEnabled true
 
-        versionCode 40101390
-        versionName "1.6.46.sc89"
+        versionCode 40101391
+        versionName "1.6.46.sc90"
 
         // Generate a random app task affinity
         manifestPlaceholders = [appTaskAffinitySuffix: "H_${gitRevision()}"]
