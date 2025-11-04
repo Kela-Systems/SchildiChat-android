@@ -92,28 +92,28 @@ class VectorSettingsGeneralFragment :
         findPreference<EditTextPreference>("SETTINGS_DISPLAY_NAME_PREFERENCE_KEY")!!
     }
     private val mPasswordPreference by lazy {
-        findPreference<VectorPreference>(VectorPreferences.SETTINGS_CHANGE_PASSWORD_PREFERENCE_KEY)!!
+        findPreference<VectorPreference>(VectorPreferences.SETTINGS_CHANGE_PASSWORD_PREFERENCE_KEY)
     }
     private val mManage3pidsPreference by lazy {
-        findPreference<VectorPreference>(VectorPreferences.SETTINGS_EMAILS_AND_PHONE_NUMBERS_PREFERENCE_KEY)!!
+        findPreference<VectorPreference>(VectorPreferences.SETTINGS_EMAILS_AND_PHONE_NUMBERS_PREFERENCE_KEY)
     }
     private val mIdentityServerPreference by lazy {
-        findPreference<VectorPreference>(VectorPreferences.SETTINGS_IDENTITY_SERVER_PREFERENCE_KEY)!!
+        findPreference<VectorPreference>(VectorPreferences.SETTINGS_IDENTITY_SERVER_PREFERENCE_KEY)
     }
     private val mExternalAccountManagementPreference by lazy {
-        findPreference<VectorPreference>(VectorPreferences.SETTINGS_EXTERNAL_ACCOUNT_MANAGEMENT_KEY)!!
+        findPreference<VectorPreference>(VectorPreferences.SETTINGS_EXTERNAL_ACCOUNT_MANAGEMENT_KEY)
     }
     private val mDeactivateAccountCategory by lazy {
-        findPreference<VectorPreferenceCategory>("SETTINGS_DEACTIVATE_ACCOUNT_CATEGORY_KEY")!!
+        findPreference<VectorPreferenceCategory>("SETTINGS_DEACTIVATE_ACCOUNT_CATEGORY_KEY")
     }
 
     // Local contacts
     private val mContactSettingsCategory by lazy {
-        findPreference<PreferenceCategory>(VectorPreferences.SETTINGS_CONTACT_PREFERENCE_KEYS)!!
+        findPreference<PreferenceCategory>(VectorPreferences.SETTINGS_CONTACT_PREFERENCE_KEYS)
     }
 
     private val mContactPhonebookCountryPreference by lazy {
-        findPreference<VectorPreference>(VectorPreferences.SETTINGS_CONTACTS_PHONEBOOK_COUNTRY_PREFERENCE_KEY)!!
+        findPreference<VectorPreference>(VectorPreferences.SETTINGS_CONTACTS_PHONEBOOK_COUNTRY_PREFERENCE_KEY)
     }
 
     private val integrationServiceListener = object : IntegrationManagerService.Listener {
@@ -187,18 +187,20 @@ class VectorSettingsGeneralFragment :
         val homeServerCapabilities = session.homeServerCapabilitiesService().getHomeServerCapabilities()
         // Password
         // Hide the preference if password can not be updated
-        if (homeServerCapabilities.canChangePassword) {
-            mPasswordPreference.onPreferenceClickListener = Preference.OnPreferenceClickListener {
-                onPasswordUpdateClick()
-                false
+        mPasswordPreference?.let {
+            if (homeServerCapabilities.canChangePassword) {
+                it.onPreferenceClickListener = Preference.OnPreferenceClickListener {
+                    onPasswordUpdateClick()
+                    false
+                }
+            } else {
+                it.isVisible = false
             }
-        } else {
-            mPasswordPreference.isVisible = false
         }
 
         // Manage 3Pid
         // Hide the preference if 3pids can not be updated
-        mManage3pidsPreference.isVisible = homeServerCapabilities.canChange3pid
+        mManage3pidsPreference?.isVisible = homeServerCapabilities.canChange3pid
 
         val openDiscoveryScreenPreferenceClickListener = Preference.OnPreferenceClickListener {
             (requireActivity() as VectorSettingsActivity).navigateTo(
@@ -208,38 +210,43 @@ class VectorSettingsGeneralFragment :
             true
         }
 
-        val discoveryPreference = findPreference<VectorPreference>(VectorPreferences.SETTINGS_DISCOVERY_PREFERENCE_KEY)!!
-        discoveryPreference.onPreferenceClickListener = openDiscoveryScreenPreferenceClickListener
+        findPreference<VectorPreference>(VectorPreferences.SETTINGS_DISCOVERY_PREFERENCE_KEY)?.let {
+            it.onPreferenceClickListener = openDiscoveryScreenPreferenceClickListener
+        }
 
-        mIdentityServerPreference.onPreferenceClickListener = openDiscoveryScreenPreferenceClickListener
+        mIdentityServerPreference?.onPreferenceClickListener = openDiscoveryScreenPreferenceClickListener
 
         // External account management URL for delegated OIDC auth
         // Hide the preference if no URL is given by server
-        if (homeServerCapabilities.externalAccountManagementUrl != null) {
-            mExternalAccountManagementPreference.onPreferenceClickListener = Preference.OnPreferenceClickListener {
-                openUrlInChromeCustomTab(it.context, null, homeServerCapabilities.externalAccountManagementUrl!!)
-                true
+        mExternalAccountManagementPreference?.let {
+            if (homeServerCapabilities.externalAccountManagementUrl != null) {
+                it.onPreferenceClickListener = Preference.OnPreferenceClickListener {
+                    openUrlInChromeCustomTab(it.context, null, homeServerCapabilities.externalAccountManagementUrl!!)
+                    true
+                }
+
+                val hostname = URL(homeServerCapabilities.externalAccountManagementUrl).host
+
+                it.summary = requireContext().getString(
+                        CommonStrings.settings_external_account_management,
+                        hostname
+                )
+            } else {
+                it.isVisible = false
             }
-
-            val hostname = URL(homeServerCapabilities.externalAccountManagementUrl).host
-
-            mExternalAccountManagementPreference.summary = requireContext().getString(
-                    CommonStrings.settings_external_account_management,
-                    hostname
-            )
-        } else {
-            mExternalAccountManagementPreference.isVisible = false
         }
 
         // Advanced settings
 
         // user account
-        findPreference<VectorPreference>(VectorPreferences.SETTINGS_LOGGED_IN_PREFERENCE_KEY)!!
-                .summary = session.myUserId
+        findPreference<VectorPreference>(VectorPreferences.SETTINGS_LOGGED_IN_PREFERENCE_KEY)?.let {
+            it.summary = session.myUserId
+        }
 
         // homeserver
-        findPreference<VectorPreference>(VectorPreferences.SETTINGS_HOME_SERVER_PREFERENCE_KEY)!!
-                .summary = session.sessionParams.homeServerUrl
+        findPreference<VectorPreference>(VectorPreferences.SETTINGS_HOME_SERVER_PREFERENCE_KEY)?.let {
+            it.summary = session.sessionParams.homeServerUrl
+        }
 
         // Contacts
         setContactsPreferences()
@@ -290,7 +297,7 @@ class VectorSettingsGeneralFragment :
         }
 
         // clear medias cache
-        findPreference<VectorPreference>(VectorPreferences.SETTINGS_CLEAR_MEDIA_CACHE_PREFERENCE_KEY)!!.let {
+        findPreference<VectorPreference>(VectorPreferences.SETTINGS_CLEAR_MEDIA_CACHE_PREFERENCE_KEY)?.let {
             lifecycleScope.launch(Dispatchers.Main) {
                 it.summary = getString(CommonStrings.loading)
                 val size = getCacheSize()
@@ -314,16 +321,17 @@ class VectorSettingsGeneralFragment :
             }
         }
         // Sign out
-        findPreference<VectorPreference>("SETTINGS_SIGN_OUT_KEY")!!
-                .onPreferenceClickListener = Preference.OnPreferenceClickListener {
-            activity?.let {
-                SignOutUiWorker(requireActivity()).perform()
-            }
+        findPreference<VectorPreference>("SETTINGS_SIGN_OUT_KEY")?.let {
+            it.onPreferenceClickListener = Preference.OnPreferenceClickListener {
+                activity?.let {
+                    SignOutUiWorker(requireActivity()).perform()
+                }
 
-            false
+                false
+            }
         }
         // Account deactivation is visible only if account is not managed by an external URL.
-        mDeactivateAccountCategory.isVisible = homeServerCapabilities.delegatedOidcAuthEnabled.not()
+        mDeactivateAccountCategory?.isVisible = homeServerCapabilities.delegatedOidcAuthEnabled.not()
     }
 
     private suspend fun getCacheSize(): Long = withContext(Dispatchers.IO) {
@@ -334,7 +342,7 @@ class VectorSettingsGeneralFragment :
     override fun onResume() {
         super.onResume()
         // Refresh identity server summary
-        mIdentityServerPreference.summary = session.identityService().getCurrentIdentityServerUrl() ?: getString(CommonStrings.identity_server_not_defined)
+        mIdentityServerPreference?.summary = session.identityService().getCurrentIdentityServerUrl() ?: getString(CommonStrings.identity_server_not_defined)
         refreshIntegrationManagerSettings()
         session.integrationManagerService().addListener(integrationServiceListener)
     }
@@ -346,14 +354,14 @@ class VectorSettingsGeneralFragment :
 
     private fun refreshIntegrationManagerSettings() {
         val integrationAllowed = session.integrationManagerService().isIntegrationEnabled()
-        (findPreference<SwitchPreference>(VectorPreferences.SETTINGS_ALLOW_INTEGRATIONS_KEY))!!.let {
+        (findPreference<SwitchPreference>(VectorPreferences.SETTINGS_ALLOW_INTEGRATIONS_KEY))?.let {
             val savedListener = it.onPreferenceChangeListener
             it.onPreferenceChangeListener = null
             it.isChecked = integrationAllowed
             it.isEnabled = true
             it.onPreferenceChangeListener = savedListener
         }
-        findPreference<VectorPreference>(VectorPreferences.SETTINGS_INTEGRATION_MANAGER_UI_URL_KEY)!!.let {
+        findPreference<VectorPreference>(VectorPreferences.SETTINGS_INTEGRATION_MANAGER_UI_URL_KEY)?.let {
             if (integrationAllowed) {
                 it.summary = session.integrationManagerService().getPreferredConfig().uiUrl
                 it.isVisible = true

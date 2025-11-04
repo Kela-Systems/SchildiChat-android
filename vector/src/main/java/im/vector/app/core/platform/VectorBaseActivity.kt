@@ -271,14 +271,39 @@ abstract class VectorBaseActivity<VB : ViewBinding> : AppCompatActivity(), Maver
     }
 
     private fun setupMenu() {
-        // Keep MenuProvider for back/close button handling, but disable overflow menu items
+        // Keep MenuProvider for back/close button handling, and allow only settings menu in home screens
         val vectorMenuProvider = this as? VectorMenuProvider
         addMenuProvider(
                 object : MenuProvider {
                     override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
+                        vectorMenuProvider?.let {
+                            menuInflater.inflate(it.getMenuRes(), menu)
+                            // Only filter home menu - hide all items except settings
+                            val menuRes = it.getMenuRes()
+                            if (menuRes == R.menu.menu_home || menuRes == R.menu.menu_new_home) {
+                                for (i in 0 until menu.size()) {
+                                    val item = menu.getItem(i)
+                                    if (item.itemId != R.id.menu_home_setting) {
+                                        item.isVisible = false
+                                    }
+                                }
+                            }
+                            it.handlePostCreateMenu(menu)
+                        }
                     }
 
                     override fun onPrepareMenu(menu: Menu) {
+                        vectorMenuProvider?.handlePrepareMenu(menu)
+                        // Only filter home menu - ensure only settings menu is visible
+                        val menuRes = vectorMenuProvider?.getMenuRes()
+                        if (menuRes == R.menu.menu_home || menuRes == R.menu.menu_new_home) {
+                            for (i in 0 until menu.size()) {
+                                val item = menu.getItem(i)
+                                if (item.itemId != R.id.menu_home_setting) {
+                                    item.isVisible = false
+                                }
+                            }
+                        }
                     }
 
                     override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
