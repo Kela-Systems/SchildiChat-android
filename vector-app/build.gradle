@@ -31,6 +31,35 @@ knit {
     }
 }
 
+// Signing configuration from sign.properties
+def signKeyStoreFile = null
+def signKeyStorePassword = null
+def signKeyAlias = null
+def signKeyPassword = null
+
+try {
+    def signPropertiesFile = rootProject.file('sign.properties')
+    if (signPropertiesFile.exists()) {
+        def signProperties = new Properties()
+        signProperties.load(new FileInputStream(signPropertiesFile))
+
+        signKeyStoreFile = rootProject.file("vector-app/${signProperties['keystore.filename']}")
+        if (!signKeyStoreFile.exists()) {
+            logger.warn("Keystore file not found: ${signKeyStoreFile.path}")
+            signKeyStoreFile = null
+        } else {
+            signKeyStorePassword = signProperties['keystore.password']
+            signKeyAlias = signProperties['key.alias']
+            signKeyPassword = signProperties['key.password']
+            logger.quiet("Keystore for signing configured from sign.properties")
+        }
+    } else {
+        logger.quiet("sign.properties not found - using default signing config")
+    }
+} catch (Exception e) {
+    logger.quiet("Keystore configuration skipped: ${e.message}")
+}
+
 // Note: 2 digits max for each value
 ext.versionMajor = 1
 ext.versionMinor = 6
@@ -241,10 +270,18 @@ android {
             storePassword System.env.ELEMENT_ANDROID_NIGHTLY_STOREPASSWORD ?: project.property("signing.element.nightly.storePassword")
         }
         release {
-            keyAlias project.property("signing.element.keyId")
-            keyPassword project.property("signing.element.keyPassword")
-            storeFile file(project.property("signing.element.storePath"))
-            storePassword project.property("signing.element.storePassword")
+            if (signKeyStoreFile != null) {
+                storeFile signKeyStoreFile
+                storePassword signKeyStorePassword
+                keyAlias signKeyAlias
+                keyPassword signKeyPassword
+            } else {
+                // Fallback to gradle.properties
+                keyAlias project.hasProperty("signing.element.keyId") ? project.property("signing.element.keyId") : "Secret"
+                keyPassword project.hasProperty("signing.element.keyPassword") ? project.property("signing.element.keyPassword") : "Secret"
+                storeFile project.hasProperty("signing.element.storePath") ? file(project.property("signing.element.storePath")) : file("releasetest.keystore")
+                storePassword project.hasProperty("signing.element.storePassword") ? project.property("signing.element.storePassword") : "Secret"
+            }
         }
     }
 
