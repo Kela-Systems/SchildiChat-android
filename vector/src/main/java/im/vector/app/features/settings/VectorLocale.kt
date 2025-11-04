@@ -42,7 +42,7 @@ class VectorLocale @Inject constructor(
         private const val ISO_15924_LATN = "Latn"
     }
 
-    private val defaultLocale = Locale("en", "US")
+    private val defaultLocale = Locale("he", "IL")
 
     /**
      * The cache of supported application languages.
