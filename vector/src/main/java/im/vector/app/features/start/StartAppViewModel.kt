@@ -20,11 +20,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.seconds
+import timber.log.Timber
 
 class StartAppViewModel @AssistedInject constructor(
         @Assisted val initialState: StartAppViewState,
         private val sessionHolder: ActiveSessionHolder,
         private val dispatchers: CoroutineDispatchers,
+        private val autoProvisioningUseCase: AutoProvisioningUseCase,
 ) : VectorViewModel<StartAppViewState, StartAppAction, StartAppViewEvent>(initialState) {
 
     @AssistedFactory
@@ -47,6 +49,13 @@ class StartAppViewModel @AssistedInject constructor(
     private fun handleStartApp() {
         handleLongProcessing()
         viewModelScope.launch(dispatchers.io) {
+            // First, try automatic provisioning if there's no active session
+            if (!sessionHolder.hasActiveSession()) {
+                Timber.d("No active session, attempting automatic provisioning...")
+                val provisioningSucceeded = autoProvisioningUseCase.executeAutoProvisioning()
+                Timber.d("Automatic provisioning result: $provisioningSucceeded")
+            }
+
             // This can take time because of DB migration(s), so do it in a background task.
             eagerlyInitializeSession()
             _viewEvents.post(StartAppViewEvent.AppStarted)
