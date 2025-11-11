@@ -14,6 +14,7 @@ enum class MdmData(val key: String) {
     DefaultHomeserverUrl(key = "im.vector.app.serverConfigDefaultHomeserverUrlString"),
     DefaultPushGatewayUrl(key = "im.vector.app.serverConfigSygnalAPIUrlString"),
     PermalinkBaseUrl(key = "im.vector.app.clientPermalinkBaseUrl"),
+    TailscaleDeviceName(key = "tailscale_device_name"),
 }
 
 interface MdmService {

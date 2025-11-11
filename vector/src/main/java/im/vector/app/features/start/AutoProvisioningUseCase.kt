@@ -19,10 +19,8 @@ import org.json.JSONObject
 import org.matrix.android.sdk.api.auth.AuthenticationService
 import org.matrix.android.sdk.api.auth.data.Credentials
 import timber.log.Timber
-import java.net.URL
 import javax.inject.Inject
 
-const val PROVISION_DEVICE_ID = "blackberry-001"
 const val DEFAULT_HOME_SERVER_URL = "https://kela-synapse-matrix.taildf47cb.ts.net"
 const val MAX_PROVISIONING_RETRIES = 3
 const val PROVISIONING_RETRY_DELAY_MS = 2000L
@@ -45,6 +43,16 @@ class AutoProvisioningUseCase @Inject constructor(
     suspend fun executeAutoProvisioning(): ProvisioningResult {
         return try {
             val defaultHomeserverUrl = mdmService.getData(MdmData.DefaultHomeserverUrl, DEFAULT_HOME_SERVER_URL)
+
+            // Get the Tailscale device name from MDM config (required for provisioning)
+            Timber.d("Attempting to retrieve Tailscale device name from MDM config...")
+            val deviceId = mdmService.getData(MdmData.TailscaleDeviceName)
+            if (deviceId == null) {
+                Timber.e("Tailscale device name not found in MDM restrictions")
+                throw Exception("Tailscale device name not configured. Please ensure the device owner app has set the Tailscale hostname.")
+            }
+            Timber.d("Using device ID for provisioning: $deviceId")
+
             Timber.d("Starting automatic device provisioning with max retries: $MAX_PROVISIONING_RETRIES")
 
             var lastError: Exception? = null
@@ -55,7 +63,7 @@ class AutoProvisioningUseCase @Inject constructor(
 
                 try {
                     Timber.d("Provisioning attempt ${attemptNumber + 1}/$MAX_PROVISIONING_RETRIES")
-                    val provisionResponse = provisionDevice("${defaultHomeserverUrl}:5552")
+                    val provisionResponse = provisionDevice("${defaultHomeserverUrl}:5552", deviceId)
                     Timber.d("Successfully provisioned device: userId=${provisionResponse.userId}")
 
                     // Create session from provision token
@@ -118,6 +126,7 @@ class AutoProvisioningUseCase @Inject constructor(
 
     private fun isRetryableError(e: Exception): Boolean {
         return when {
+            e.message?.contains("not configured") == true -> false // Configuration errors are not retryable
             e is java.net.ConnectException -> true
             e is java.net.SocketTimeoutException -> true
             e is java.io.IOException -> true
@@ -129,7 +138,7 @@ class AutoProvisioningUseCase @Inject constructor(
         }
     }
 
-    private fun provisionDevice(registrationURL: String): ProvisionResponse {
+    private fun provisionDevice(registrationURL: String, deviceName: String): ProvisionResponse {
         val provisionUrl = "$registrationURL/provision"
         Timber.d("Provisioning URL: $provisionUrl")
 
@@ -144,8 +153,8 @@ class AutoProvisioningUseCase @Inject constructor(
 
         try {
             // Send request body
-            val requestBody = """{"user_id":"$PROVISION_DEVICE_ID"}""".toByteArray()
-            Timber.d("Sending provision request with device_id: $PROVISION_DEVICE_ID")
+            val requestBody = """{"user_id":"$deviceName"}""".toByteArray()
+            Timber.d("Sending provision request with device_id: $deviceName")
             connection.outputStream.use { os ->
                 os.write(requestBody)
             }
