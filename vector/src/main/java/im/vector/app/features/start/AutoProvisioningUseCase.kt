@@ -13,6 +13,7 @@ import im.vector.app.core.di.ActiveSessionHolder
 import im.vector.app.features.login.HomeServerConnectionConfigFactory
 import im.vector.app.features.mdm.MdmData
 import im.vector.app.features.mdm.MdmService
+import im.vector.app.features.settings.VectorPreferences
 import kotlinx.coroutines.delay
 import org.json.JSONObject
 import org.matrix.android.sdk.api.auth.AuthenticationService
@@ -39,6 +40,7 @@ class AutoProvisioningUseCase @Inject constructor(
         private val activeSessionHolder: ActiveSessionHolder,
         private val homeServerConnectionConfigFactory: HomeServerConnectionConfigFactory,
         private val mdmService: MdmService,
+        private val vectorPreferences: VectorPreferences,
         ) {
     suspend fun executeAutoProvisioning(): ProvisioningResult {
         return try {
@@ -76,6 +78,11 @@ class AutoProvisioningUseCase @Inject constructor(
 
                     activeSessionHolder.setActiveSession(session)
                     Timber.d("Session created successfully from provisioning")
+
+                    // Automatically set to simplified (easy) mode for newly provisioned devices
+                    vectorPreferences.setSimplifiedMode(true)
+                    Timber.d("Automatically enabled easy mode for provisioned device")
+
                     success = true
                     lastError = null
                 } catch (e: Exception) {
