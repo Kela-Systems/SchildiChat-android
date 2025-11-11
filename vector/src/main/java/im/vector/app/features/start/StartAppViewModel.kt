@@ -43,6 +43,7 @@ class StartAppViewModel @AssistedInject constructor(
     override fun handle(action: StartAppAction) {
         when (action) {
             StartAppAction.StartApp -> handleStartApp()
+            StartAppAction.RetryProvisioning -> handleRetryProvisioning()
         }
     }
 
@@ -52,13 +53,59 @@ class StartAppViewModel @AssistedInject constructor(
             // First, try automatic provisioning if there's no active session
             if (!sessionHolder.hasActiveSession()) {
                 Timber.d("No active session, attempting automatic provisioning...")
-                val provisioningSucceeded = autoProvisioningUseCase.executeAutoProvisioning()
-                Timber.d("Automatic provisioning result: $provisioningSucceeded")
+                setState { copy(isProvisioningInProgress = true, provisioningError = null) }
+                val result = autoProvisioningUseCase.executeAutoProvisioning()
+                Timber.d("Automatic provisioning result: $result")
+
+                when (result) {
+                    is ProvisioningResult.Success -> {
+                        setState { copy(isProvisioningInProgress = false) }
+                    }
+                    is ProvisioningResult.Failure -> {
+                        setState {
+                            copy(
+                                isProvisioningInProgress = false,
+                                provisioningError = result.error,
+                                isProvisioningRetryable = result.isRetryable
+                            )
+                        }
+                        _viewEvents.post(StartAppViewEvent.ProvisioningFailed(result.error, result.isRetryable))
+                        return@launch
+                    }
+                }
             }
 
             // This can take time because of DB migration(s), so do it in a background task.
             eagerlyInitializeSession()
             _viewEvents.post(StartAppViewEvent.AppStarted)
+        }
+    }
+
+    private fun handleRetryProvisioning() {
+        Timber.d("Retrying automatic provisioning...")
+        viewModelScope.launch(dispatchers.io) {
+            setState { copy(isProvisioningInProgress = true, provisioningError = null) }
+            val result = autoProvisioningUseCase.executeAutoProvisioning()
+            Timber.d("Automatic provisioning retry result: $result")
+
+            when (result) {
+                is ProvisioningResult.Success -> {
+                    setState { copy(isProvisioningInProgress = false) }
+                    // Continue with app initialization
+                    eagerlyInitializeSession()
+                    _viewEvents.post(StartAppViewEvent.AppStarted)
+                }
+                is ProvisioningResult.Failure -> {
+                    setState {
+                        copy(
+                            isProvisioningInProgress = false,
+                            provisioningError = result.error,
+                            isProvisioningRetryable = result.isRetryable
+                        )
+                    }
+                    _viewEvents.post(StartAppViewEvent.ProvisioningFailed(result.error, result.isRetryable))
+                }
+            }
         }
     }
 

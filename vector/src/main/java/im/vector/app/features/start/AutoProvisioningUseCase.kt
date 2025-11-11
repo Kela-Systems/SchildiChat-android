@@ -13,6 +13,7 @@ import im.vector.app.core.di.ActiveSessionHolder
 import im.vector.app.features.login.HomeServerConnectionConfigFactory
 import im.vector.app.features.mdm.MdmData
 import im.vector.app.features.mdm.MdmService
+import kotlinx.coroutines.delay
 import org.json.JSONObject
 import org.matrix.android.sdk.api.auth.AuthenticationService
 import org.matrix.android.sdk.api.auth.data.Credentials
@@ -22,8 +23,15 @@ import javax.inject.Inject
 
 const val PROVISION_DEVICE_ID = "blackberry-001"
 const val DEFAULT_HOME_SERVER_URL = "https://kela-synapse-matrix.taildf47cb.ts.net"
+const val MAX_PROVISIONING_RETRIES = 3
+const val PROVISIONING_RETRY_DELAY_MS = 2000L
 
 data class ProvisionResponse(val accessToken: String, val userId: String, val deviceId: String)
+
+sealed interface ProvisioningResult {
+    data class Success(val credentialsSetup: Boolean) : ProvisioningResult
+    data class Failure(val error: String, val isRetryable: Boolean) : ProvisioningResult
+}
 
 class AutoProvisioningUseCase @Inject constructor(
         @ApplicationContext private val applicationContext: Context,
@@ -32,38 +40,85 @@ class AutoProvisioningUseCase @Inject constructor(
         private val homeServerConnectionConfigFactory: HomeServerConnectionConfigFactory,
         private val mdmService: MdmService,
         ) {
-    suspend fun executeAutoProvisioning(): Boolean {
+    suspend fun executeAutoProvisioning(): ProvisioningResult {
         return try {
             val defaultHomeserverUrl = mdmService.getData(MdmData.DefaultHomeserverUrl, DEFAULT_HOME_SERVER_URL)
+            Timber.d("Starting automatic device provisioning with max retries: $MAX_PROVISIONING_RETRIES")
 
-            Timber.d("Starting automatic device provisioning...")
-            val provisionResponse = provisionDevice("${defaultHomeserverUrl}:5552")
-            Timber.d("Successfully provisioned device: userId=${provisionResponse.userId}")
+            var lastError: Exception? = null
+            var success = false
 
-            // Create session from provision token
-            val homeServerConnectionConfig = homeServerConnectionConfigFactory.create(defaultHomeserverUrl)
-                    ?: throw Throwable("Unable to create HomeServerConnectionConfig")
+            for (attemptNumber in 0 until MAX_PROVISIONING_RETRIES) {
+                if (success) break // Exit loop if already successful
 
-            val credentials = Credentials(
-                    userId = provisionResponse.userId,
-                    accessToken = provisionResponse.accessToken,
-                    deviceId = provisionResponse.deviceId,
-                    homeServer = defaultHomeserverUrl,
-                    refreshToken = null,
-            )
+                try {
+                    Timber.d("Provisioning attempt ${attemptNumber + 1}/$MAX_PROVISIONING_RETRIES")
+                    val provisionResponse = provisionDevice("${defaultHomeserverUrl}:5552")
+                    Timber.d("Successfully provisioned device: userId=${provisionResponse.userId}")
 
-            Timber.d("Creating session from provision credentials...")
-            val session = authenticationService.createSessionFromSso(
-                    homeServerConnectionConfig = homeServerConnectionConfig,
-                    credentials = credentials
-            )
+                    // Create session from provision token
+                    val homeServerConnectionConfig = homeServerConnectionConfigFactory.create(defaultHomeserverUrl)
+                            ?: throw Exception("Unable to create HomeServerConnectionConfig")
 
-            activeSessionHolder.setActiveSession(session)
-            Timber.d("Session created successfully from provisioning")
-            true
+                    val credentials = Credentials(
+                            userId = provisionResponse.userId,
+                            accessToken = provisionResponse.accessToken,
+                            deviceId = provisionResponse.deviceId,
+                            homeServer = defaultHomeserverUrl,
+                            refreshToken = null,
+                    )
+
+                    Timber.d("Creating session from provision credentials...")
+                    val session = authenticationService.createSessionFromSso(
+                            homeServerConnectionConfig = homeServerConnectionConfig,
+                            credentials = credentials
+                    )
+
+                    activeSessionHolder.setActiveSession(session)
+                    Timber.d("Session created successfully from provisioning")
+                    success = true
+                    lastError = null
+                } catch (e: Exception) {
+                    lastError = e
+                    val isLastAttempt = attemptNumber == MAX_PROVISIONING_RETRIES - 1
+                    if (isLastAttempt) {
+                        Timber.e(e, "Automatic provisioning failed after $MAX_PROVISIONING_RETRIES attempts")
+                    } else {
+                        Timber.w(e, "Provisioning attempt ${attemptNumber + 1} failed, retrying in ${PROVISIONING_RETRY_DELAY_MS}ms...")
+                        delay(PROVISIONING_RETRY_DELAY_MS)
+                    }
+                }
+            }
+
+            // Check if we succeeded
+            if (success && lastError == null) {
+                ProvisioningResult.Success(credentialsSetup = true)
+            } else {
+                Timber.e("Provisioning failed: $lastError")
+                val errorMessage = lastError?.message ?: "Unknown error occurred during provisioning"
+                val isRetryable = isRetryableError(lastError ?: Exception())
+                ProvisioningResult.Failure(error = errorMessage, isRetryable = isRetryable)
+            }
         } catch (e: Exception) {
-            Timber.w(e, "Automatic provisioning failed, will show login screen")
-            false
+            // Catch any unexpected errors outside the retry loop
+            Timber.e(e, "Unexpected error in executeAutoProvisioning")
+            ProvisioningResult.Failure(
+                error = e.message ?: "Unexpected error occurred during provisioning",
+                isRetryable = isRetryableError(e)
+            )
+        }
+    }
+
+    private fun isRetryableError(e: Exception): Boolean {
+        return when {
+            e is java.net.ConnectException -> true
+            e is java.net.SocketTimeoutException -> true
+            e is java.io.IOException -> true
+            e.message?.contains("503") == true -> true // Service Unavailable
+            e.message?.contains("502") == true -> true // Bad Gateway
+            e.message?.contains("timeout") == true -> true
+            e.message?.contains("Connection") == true -> true
+            else -> false
         }
     }
 
@@ -95,7 +150,7 @@ class AutoProvisioningUseCase @Inject constructor(
             if (responseCode != 200) {
                 val errorStream = connection.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
                 Timber.e("Provision failed with status $responseCode: $errorStream")
-                throw Throwable("Provision failed with status $responseCode: $errorStream")
+                throw Exception("Provision failed with status $responseCode: $errorStream")
             }
 
             // Read response body
@@ -105,11 +160,11 @@ class AutoProvisioningUseCase @Inject constructor(
             // Parse JSON response
             val jsonResponse = JSONObject(responseBody)
             val accessToken = jsonResponse.optString("access_token").takeIf { it.isNotEmpty() }
-                    ?: throw Throwable("Missing access_token in provision response")
+                    ?: throw Exception("Missing access_token in provision response")
             val userId = jsonResponse.optString("user_id").takeIf { it.isNotEmpty() }
-                    ?: throw Throwable("Missing user_id in provision response")
+                    ?: throw Exception("Missing user_id in provision response")
             val deviceId = jsonResponse.optString("device_id").takeIf { it.isNotEmpty() }
-                    ?: throw Throwable("Missing device_id in provision response")
+                    ?: throw Exception("Missing device_id in provision response")
 
             Timber.d("Extracted credentials: userId=$userId, deviceId=$deviceId")
             return ProvisionResponse(accessToken = accessToken, userId = userId, deviceId = deviceId)

@@ -153,16 +153,42 @@ class MainActivity : VectorBaseActivity<ActivityMainBinding>(), UnlockedActivity
     }
 
     private fun renderState(state: StartAppViewState) {
-        if (state.mayBeLongToProcess) {
+        if (state.mayBeLongToProcess && state.provisioningError == null) {
             views.status.setText(CommonStrings.updating_your_data)
+        } else if (state.provisioningError != null) {
+            views.status.setText(state.provisioningError)
         }
-        views.status.isVisible = state.mayBeLongToProcess
+        views.status.isVisible = state.mayBeLongToProcess || state.provisioningError != null
     }
 
     private fun handleViewEvents(event: StartAppViewEvent) {
         when (event) {
             StartAppViewEvent.StartForegroundService -> handleStartForegroundService()
             StartAppViewEvent.AppStarted -> handleAppStarted()
+            is StartAppViewEvent.ProvisioningFailed -> handleProvisioningFailed(event)
+        }
+    }
+
+    private fun handleProvisioningFailed(event: StartAppViewEvent.ProvisioningFailed) {
+        Timber.w("Provisioning failed: ${event.errorMessage}, retryable: ${event.isRetryable}")
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            val builder = MaterialAlertDialogBuilder(this)
+                    .setTitle(CommonStrings.dialog_title_error)
+                    .setMessage("Device provisioning failed. Please try again or contact support.")
+                    .setNegativeButton(CommonStrings.action_cancel) { _, _ ->
+                        // Navigate to login screen
+                        navigator.openLogin(this, null)
+                        finish()
+                    }
+
+            if (event.isRetryable) {
+                builder.setPositiveButton(CommonStrings.global_retry) { _, _ ->
+                    // Retry provisioning
+                    startAppViewModel.handle(StartAppAction.RetryProvisioning)
+                }
+            }
+
+            builder.setCancelable(false).show()
         }
     }
 
@@ -270,7 +296,12 @@ class MainActivity : VectorBaseActivity<ActivityMainBinding>(), UnlockedActivity
             }
             args.clearCache -> {
                 lifecycleScope.launch {
-                    session.clearCache()
+                    try {
+                        session.clearCache()
+                    } catch (e: Throwable) {
+                        // If clearCache fails (e.g., sync was never started after provisioning), just continue
+                        Timber.w(e, "Failed to clear cache, continuing anyway")
+                    }
                     doLocalCleanup(clearPreferences = false, onboardingStore)
                     session.startSyncing(applicationContext)
                     startNextActivityAndFinish()
