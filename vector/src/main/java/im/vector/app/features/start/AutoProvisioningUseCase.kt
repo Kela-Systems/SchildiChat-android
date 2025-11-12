@@ -24,6 +24,10 @@ import javax.inject.Inject
 const val DEFAULT_HOME_SERVER_URL = "https://kela-synapse-matrix.taildf47cb.ts.net"
 const val MAX_PROVISIONING_RETRIES = 3
 const val PROVISIONING_RETRY_DELAY_MS = 2000L
+const val PROVISION_CONNECT_TIMEOUT_MS = 10000
+const val PROVISION_READ_TIMEOUT_MS = 10000
+
+const val PROVISION_PORT = 5552
 
 data class ProvisionResponse(val accessToken: String, val userId: String, val deviceId: String)
 
@@ -59,11 +63,9 @@ class AutoProvisioningUseCase @Inject constructor(
             var success = false
 
             for (attemptNumber in 0 until MAX_PROVISIONING_RETRIES) {
-                if (success) break // Exit loop if already successful
-
                 try {
                     Timber.d("Provisioning attempt ${attemptNumber + 1}/$MAX_PROVISIONING_RETRIES")
-                    val provisionResponse = provisionDevice("${defaultHomeserverUrl}:5552", deviceId)
+                    val provisionResponse = provisionDevice(defaultHomeserverUrl, deviceId)
                     Timber.d("Successfully provisioned device: userId=${provisionResponse.userId}")
 
                     // Create session from provision token
@@ -138,17 +140,32 @@ class AutoProvisioningUseCase @Inject constructor(
         }
     }
 
-    private fun provisionDevice(registrationURL: String, deviceName: String): ProvisionResponse {
-        val provisionUrl = "$registrationURL/provision"
+    private fun provisionDevice(homeserverUrl: String, deviceName: String): ProvisionResponse {
+        // Parse the homeserver URL and add the provisioning port correctly
+        val baseUrl = if (homeserverUrl.endsWith("/")) homeserverUrl.dropLast(1) else homeserverUrl
+        val provisionUrl = try {
+            val parsedUrl = java.net.URL(baseUrl)
+            // Build URL with proper port handling to avoid duplicating ports
+            val host = parsedUrl.host
+            val protocol = parsedUrl.protocol
+            java.net.URL("$protocol://$host:$PROVISION_PORT/provision").toString()
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to parse homeserver URL: $baseUrl, using default format")
+            "$baseUrl:$PROVISION_PORT/provision"
+        }
         Timber.d("Provisioning URL: $provisionUrl")
 
+        // NOTE: HttpURLConnection is used here instead of the app's configured OkHttp client
+        // because this provisioning happens before a Matrix session is created. The Matrix SDK's
+        // OkHttpClient is not available at this stage. In a future refactor, consider injecting
+        // a standalone OkHttpClient for provisioning use cases to maintain consistency.
         val url = java.net.URL(provisionUrl)
         val connection = (url.openConnection() as java.net.HttpURLConnection).apply {
             requestMethod = "POST"
             setRequestProperty("Content-Type", "application/json")
             doOutput = true
-            connectTimeout = 10000 // 10 second timeout
-            readTimeout = 10000
+            connectTimeout = PROVISION_CONNECT_TIMEOUT_MS
+            readTimeout = PROVISION_READ_TIMEOUT_MS
         }
 
         try {
