@@ -19,4 +19,9 @@ sealed interface StartAppViewEvent : VectorViewEvents {
      * Will be sent when the current Session has been set.
      */
     object AppStarted : StartAppViewEvent
+
+    /**
+     * Will be sent when automatic provisioning fails.
+     */
+    data class ProvisioningFailed(val errorMessage: String, val isRetryable: Boolean) : StartAppViewEvent
 }

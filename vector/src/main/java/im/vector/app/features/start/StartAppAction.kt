@@ -11,4 +11,6 @@ import im.vector.app.core.platform.VectorViewModelAction
 
 sealed interface StartAppAction : VectorViewModelAction {
     object StartApp : StartAppAction
+
+    object RetryProvisioning : StartAppAction
 }

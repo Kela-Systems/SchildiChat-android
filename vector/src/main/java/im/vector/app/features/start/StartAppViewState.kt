@@ -10,5 +10,8 @@ package im.vector.app.features.start
 import com.airbnb.mvrx.MavericksState
 
 data class StartAppViewState(
-        val mayBeLongToProcess: Boolean = false
+        val mayBeLongToProcess: Boolean = false,
+        val isProvisioningInProgress: Boolean = false,
+        val provisioningError: String? = null,
+        val isProvisioningRetryable: Boolean = false,
 ) : MavericksState
