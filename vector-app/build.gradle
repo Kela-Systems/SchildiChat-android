@@ -62,11 +62,11 @@ try {
 
 // Note: 2 digits max for each value
 ext.versionMajor = 0
-ext.versionMinor = 1
+ext.versionMinor = 2
 // Note: even values are reserved for regular release, odd values for hotfix release.
 // When creating a hotfix, you should decrease the value, since the current value
 // is the value for the next regular release.
-ext.versionPatch = 1
+ext.versionPatch = 0
 
 ext.scVersion = 0
 
@@ -183,8 +183,8 @@ android {
         renderscriptTargetApi 24
         renderscriptSupportModeEnabled true
 
-        versionCode 4000102
-        versionName "0.1.1.sc0"
+        versionCode 4000200
+        versionName "0.2.0.sc0"
 
         // Generate a random app task affinity
         manifestPlaceholders = [appTaskAffinitySuffix: "H_${gitRevision()}"]
@@ -359,14 +359,14 @@ android {
             }
 
             dimension "store"
-            versionName "0.1.1.sc0"
+            versionName "0.2.0.sc0"
             buildConfigField "String", "SHORT_FLAVOR_DESCRIPTION", "\"G\""
             buildConfigField "String", "FLAVOR_DESCRIPTION", "\"GooglePlay\""
         }
 
         fdroid {
             dimension "store"
-            versionName "0.1.1.sc0"
+            versionName "0.2.0.sc0"
             buildConfigField "String", "SHORT_FLAVOR_DESCRIPTION", "\"F\""
             buildConfigField "String", "FLAVOR_DESCRIPTION", "\"FDroid\""
             isDefault = true
