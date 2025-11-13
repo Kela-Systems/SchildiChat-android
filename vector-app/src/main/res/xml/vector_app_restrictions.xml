@@ -15,9 +15,4 @@
         android:restrictionType="string"
         android:title="@string/restriction_permalink_base_url_title" />
 
-    <restriction
-        android:key="tailscale_device_name"
-        android:restrictionType="string"
-        android:title="@string/restriction_tailscale_device_name_title" />
-
 </restrictions>

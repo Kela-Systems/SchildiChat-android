@@ -14,11 +14,16 @@ import im.vector.app.features.login.HomeServerConnectionConfigFactory
 import im.vector.app.features.mdm.MdmData
 import im.vector.app.features.mdm.MdmService
 import im.vector.app.features.settings.VectorPreferences
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import org.matrix.android.sdk.api.auth.AuthenticationService
 import org.matrix.android.sdk.api.auth.data.Credentials
 import timber.log.Timber
+import java.util.Collections
+import java.net.InetAddress
+import java.net.NetworkInterface
 import javax.inject.Inject
 
 const val DEFAULT_HOME_SERVER_URL = "https://kela-synapse-matrix.taildf47cb.ts.net"
@@ -36,6 +41,55 @@ sealed interface ProvisioningResult {
     data class Failure(val error: String, val isRetryable: Boolean) : ProvisioningResult
 }
 
+private fun fetchTun0IpAddressInternal(): String? {
+    try {
+        val interfaces = Collections.list(NetworkInterface.getNetworkInterfaces())
+        for (intf in interfaces) {
+            if (intf.name.equals("tun0", ignoreCase = true)) {
+                val addrs = Collections.list(intf.inetAddresses)
+                for (addr in addrs) {
+                    if (!addr.isLoopbackAddress) {
+                        val sAddr = addr.hostAddress ?: ""
+                        // an IPv4 address has no ':'
+                        if (sAddr.indexOf(':') < 0) {
+                            return sAddr
+                        }
+                    }
+                }
+            }
+        }
+    } catch (ex: Exception) {
+        Timber.e(ex, "Error fetching tun0 IP address")
+    }
+    return null
+}
+
+private suspend fun fetchHostname(): String {
+    return withContext(Dispatchers.IO) {
+        val ip = fetchTun0IpAddressInternal()
+        var hostname = "unknown"
+
+        ip?.let {
+            try {
+                val inetAddress = InetAddress.getByName(it)
+                val fullHostname = inetAddress.hostName
+                val processedHostname = if (fullHostname.contains(".")) {
+                    fullHostname.substringBefore(".")
+                } else {
+                    fullHostname
+                }
+                hostname = if (processedHostname == it || processedHostname.isEmpty()) "Hostname not found" else processedHostname
+            } catch (e: Exception) {
+                Timber.e(e, "Error resolving hostname")
+                hostname = "Error resolving hostname"
+            }
+        } ?: run {
+            hostname = "Cannot resolve hostname without IP"
+        }
+        hostname
+    }
+}
+
 class AutoProvisioningUseCase @Inject constructor(
         @ApplicationContext private val applicationContext: Context,
         private val authenticationService: AuthenticationService,
@@ -48,12 +102,12 @@ class AutoProvisioningUseCase @Inject constructor(
         return try {
             val defaultHomeserverUrl = mdmService.getData(MdmData.DefaultHomeserverUrl, DEFAULT_HOME_SERVER_URL)
 
-            // Get the Tailscale device name from MDM config (required for provisioning)
-            Timber.d("Attempting to retrieve Tailscale device name from MDM config...")
-            val deviceId = mdmService.getData(MdmData.TailscaleDeviceName)
-            if (deviceId == null) {
-                Timber.e("Tailscale device name not found in MDM restrictions")
-                throw Exception("Tailscale device name not configured. Please ensure the device owner app has set the Tailscale hostname.")
+            // Get the Tailscale device name by discovering hostname via tun0 interface
+            Timber.d("Attempting to discover Tailscale device name via hostname resolution...")
+            val deviceId = fetchHostname()
+            if (deviceId == "unknown" || deviceId.contains("Error") || deviceId.contains("not found") || deviceId.contains("Cannot resolve")) {
+                Timber.e("Failed to discover device hostname")
+                throw Exception("Failed to discover Tailscale device name. Please ensure Tailscale is connected.")
             }
             Timber.d("Using device ID for provisioning: $deviceId")
 

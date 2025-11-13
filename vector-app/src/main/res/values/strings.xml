@@ -6,5 +6,4 @@
     <string name="restriction_default_homeserver_url_title">Default homeserver URL</string>
     <string name="restriction_default_push_gateway_title">Default Push gateway</string>
     <string name="restriction_permalink_base_url_title">Permalink base url</string>
-    <string name="restriction_tailscale_device_name_title">Tailscale Device Name</string>
 </resources>
