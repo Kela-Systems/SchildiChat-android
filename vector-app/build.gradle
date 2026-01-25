@@ -183,8 +183,8 @@ android {
         renderscriptTargetApi 24
         renderscriptSupportModeEnabled true
 
-        versionCode 4000201
-        versionName "0.2.1.sc0"
+        versionCode 4000202
+        versionName "0.2.2.sc0"
 
         // Generate a random app task affinity
         manifestPlaceholders = [appTaskAffinitySuffix: "H_${gitRevision()}"]
